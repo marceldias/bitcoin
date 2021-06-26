@@ -1,0 +1,413 @@
+#Setup do ambiente
+
+import numpy as np 
+import pandas as pd 
+
+import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+
+import networkx as nx
+import plotly.graph_objects as go 
+
+from sklearn.preprocessing import MinMaxScaler
+
+import warnings 
+warnings.filterwarnings('ignore')
+
+url = 'https://raw.githubusercontent.com/RobertoSaeger/aprendizadoMaquina/main/bitcoin_data.csv'
+df = pd.read_csv(url)
+
+Tratamento do dataset
+
+# Para garantir que a coluna data está em formato de data (se for necessário)
+
+df['Date'] =  pd.to_datetime(df['Date'],infer_datetime_format=True,format='%y-%m-%d')
+df.sort_values(by='Date',inplace=True)
+df.head()
+print("\nDataframe principal\n")
+df
+
+#NA values
+
+prev_len=df.shape[0]
+df=df.dropna()
+
+print("Total de registros removidos")
+print(prev_len-df.shape[0])
+
+print("Total de registros após remoção de NA")
+print(df.shape)
+
+#Missing Values
+
+missed = pd.DataFrame()
+missed['column'] = df.columns
+
+missed['percent'] = [round(100* df[col].isnull().sum() / len(df), 2) for col in df.columns]
+missed = missed.sort_values('percent',ascending=False)
+missed = missed[missed['percent']>0]
+
+#Comportamento em destaque: ano de 2017/2018
+
+t = df.tail(n=150)
+fig = go.Figure(
+    data=[
+        go.Candlestick(
+            x=t["Date"],
+            open=t["Open"],
+            high=t["High"],
+            low=t["Low"],
+            close=t["Close"],
+        )
+    ]
+)
+
+fig.update_layout(
+    title='Comportamento em destaque: ano de 2017/2018'
+)
+fig.show()
+
+def triple_plot(x, title,c):
+    fig, ax = plt.subplots(3,1,figsize=(20,10),sharex=True)
+    sns.distplot(x, ax=ax[0],color=c)
+    ax[0].set(xlabel=None)
+    ax[0].set_title('Histogram + KDE')
+    sns.boxplot(x, ax=ax[1],color=c)
+    ax[1].set(xlabel=None)
+    ax[1].set_title('Boxplot')
+    sns.violinplot(x, ax=ax[2],color=c)
+    ax[2].set(xlabel=None)
+    ax[2].set_title('Violin plot')
+    fig.suptitle(title, fontsize=10)
+    plt.tight_layout(pad=3.0)
+    plt.show()
+    
+triple_plot(df['Open'],'Distribuição do preço de abertura (USD)', None)
+    
+# Correlações entre os dados
+print(df.corr())
+
+plt.figure(figsize=(10,10))
+corr=df[df.columns[1:]].corr()
+mask = np.triu(np.ones_like(corr, dtype=bool))
+sns.heatmap(df[df.columns[1:]].corr(), mask=mask, cmap='YlGnBu', vmax=.3, center=0,
+            square=True, linewidths=.5,annot=True)
+plt.show()    
+    
+#Rede de correlações
+
+indices = corr.index.values
+cor_matrix = np.asmatrix(corr)
+G = nx.from_numpy_matrix(cor_matrix)
+G = nx.relabel_nodes(G,lambda x: indices[x])
+
+def corr_network(G, corr_direction, min_correlation):
+    H = G.copy()
+
+    for s1, s2, weight in G.edges(data=True):       
+        if corr_direction == "positive":
+            if weight["weight"] < 0 or weight["weight"] < min_correlation:
+                H.remove_edge(s1, s2)
+        else:
+            if weight["weight"] >= 0 or weight["weight"] > min_correlation:
+                H.remove_edge(s1, s2)
+                
+    edges,weights = zip(*nx.get_edge_attributes(H,'weight').items())
+    weights = tuple([(1+abs(x))**2 for x in weights])
+   
+    d = dict(nx.degree(H))
+    nodelist=d.keys()
+    node_sizes=d.values()
+    
+    positions=nx.circular_layout(H)
+    
+    plt.figure(figsize=(10,10))
+
+    nx.draw_networkx_nodes(H,positions,node_color='#00b4d9',nodelist=nodelist,
+                       node_size=tuple([x**4 for x in node_sizes]),alpha=0.8)
+
+    nx.draw_networkx_labels(H, positions, font_size=13)
+
+    if corr_direction == "positive":
+        edge_colour = plt.cm.summer 
+    else:
+        edge_colour = plt.cm.autumn
+        
+# Cálculos adicionais:
+# Day Change: Close - Open
+# Day Range: High - Low
+# Average Price: (Open + Close + High + Low) / 4
+# Impact: Average Price * volume (amount of money in transactions by day).
+bitc2 = df
+bitc2['DC'] = bitc2.Close - bitc2.Open
+bitc2['DR'] = bitc2.High - bitc2.Low
+bitc2['Average'] = ((bitc2.Open + bitc2.Close + bitc2.High + bitc2.Low) / 4)
+bitc2['Impact'] =  bitc2.Average * bitc2.Volume
+bitc2.head()    
+
+# Open Vs Close
+
+bitoc = df[['Open', 'Close']]
+bitoc = bitoc.plot(kind='line',color = ('royalblue', 'black'), figsize = [20, 8], fontsize = 14)
+bitoc.set_title('Abertura X Fechamento', fontsize = 18)    
+
+# High Vs Low
+
+bithl = df[['High', 'Low']]
+bithl = bithl.plot(kind='line',color = ('royalblue', 'black'), figsize = [20, 8], fontsize = 14)
+bithl.set_title('Alta X Baixa', fontsize = 18)
+
+# Flutuação diária
+
+bitdr = bitc2.DR.plot(kind = 'line', color = 'royalblue', figsize = [20, 8], fontsize = 14)
+bitdr.set_title('Flutuação diária', fontsize = 18)
+
+# Volume de transações diário (em dezenas de bilhões)
+
+b2v = bitc2.Volume.plot(kind = 'line', color = 'royalblue', figsize = [20, 8], fontsize = 14)
+b2v.set_title('Volume de transações diário (em dezenas de bilões)', fontsize = 18)
+
+Datas relevantes
+
+print("Valor do Maior preço de fechamento:\n", bitc2.Close.max())
+print('----------')
+print("Valor no Dia de maior alta:\n", bitc2.High.max())
+print('----------')
+print("Valor no Dia de maior média:\n", bitc2.Average.max())
+print('----------')
+print("Volume no Dia com maior volume de transações:\n", bitc2.Volume.max())
+print('----------')
+print("Valor no  Dia com maior somatório em valor transações:\n", bitc2.Impact.max())
+print('----------')
+print('Valor nos 3 dias com maiores preços no fechamento:\n', bitc2.Close.sort_values(ascending = False).head(3))
+print('----------')
+print('Valor nos 3 dias com maiores altas:\n', bitc2.High.sort_values(ascending = False).head(3))
+print('----------')
+print('Valor nos 3 dias com maiores médias:\n', bitc2.Average.sort_values(ascending = False).head(3))
+print('----------')
+print('Volume nos 3 dias com maior volume de transações (em dinheiro):\n', bitc2.Volume.sort_values(ascending = False).head(3))
+print('----------')
+print('Volume nos 3 dias com maior volume de bitcoins comercializadas:\n', bitc2.Impact.sort_values(ascending = False).head(3))
+
+# Separação entre treino e teste
+
+num_shape = 300
+
+# Dataframe de treino: do 0 ao 300 (inclusive), com todos os dados da segunda coluna (Open)
+train = df.iloc[:num_shape, 1:2].values
+
+# Dataframe de teste: do 301 em diante, com todos os dados da segunda coluna (Open)
+test = df.iloc[num_shape:, 1:2].values
+
+# Normalização dos dados
+
+sc = MinMaxScaler(feature_range = (0, 1))
+train_scaled = sc.fit_transform(train)
+
+# Uma vez que os LSTMs armazenam o estado da memória de longo prazo, é criada uma estrutura de dados com 30 passos de tempo e 1 saída
+# Portanto, para cada elemento do conjunto de treinamento, tem-se 30 elementos do conjunto de treinamento anterior
+
+# Definir janela de tempo (30 elementos)
+window = 30
+
+X_train = []
+
+#Valor no dia seguinte
+y_train = []
+
+for i in range(window, num_shape):
+    X_train_ = np.reshape(train_scaled[i-window:i, 0], (window, 1))
+    X_train.append(X_train_)
+    y_train.append(train_scaled[i, 0])
+X_train = np.stack(X_train)
+y_train = np.stack(y_train)
+
+#1)X_train - Variáveis ​​independentes, que elas serão usadas para treinar o modelo.
+#2)X_test - Esta é a porção restante das variáveis ​​independentes dos dados que não serão usados ​​na fase de treinamento e serão usados ​​para fazer previsões para testar a precisão do modelo.
+#3)y_train - Representa a variável dependente que precisa ser prevista por este modelo; isso inclui rótulos de categoria em relação às suas variáveis ​​independentes.
+#4)y_test - Esses dados têm rótulos de categoria para seus dados de teste. Esses rótulos serão usados ​​para testar a precisão entre as categorias reais e previstas.
+
+model = Sequential()
+
+# Primeira camada LSTM, 50 neurônios, com regularização 
+model.add(LSTM(units = 50, return_sequences = True, input_shape = (X_train.shape[1], 1)))
+model.add(Dropout(0.2))
+
+# Segunda camada LSTM
+model.add(LSTM(units = 50, return_sequences = True))
+model.add(Dropout(0.2))
+
+# Terceira camada LSTM
+model.add(LSTM(units = 50, return_sequences = True))
+model.add(Dropout(0.2))
+
+# Quarta camada LSTM
+model.add(LSTM(units = 50))
+model.add(Dropout(0.2))
+
+# Camada de saída
+model.add(Dense(units = 1))
+model.summary()
+
+# Agora, prepara-se o conjunto de teste de maneira semelhante ao conjunto de treinamento.
+# O seguinte foi feito para que 30 entradas do conjunto de teste tenham 30 valores anteriores que são impossíveis de obter a menos que tome-se o todo
+# Atributo 'High' de dados para processamento
+
+df_volume = np.vstack((train, test))
+
+inputs = df_volume[df_volume.shape[0] - test.shape[0] - window:]
+inputs = inputs.reshape(-1,1)
+inputs = sc.transform(inputs)
+
+num_2 = df_volume.shape[0] - num_shape + window
+
+# Preparando X_test e prevendo os preços
+X_test = []
+for i in range(window, num_2):
+    X_test_ = np.reshape(inputs[i-window:i, 0], (window, 1))
+    X_test.append(X_test_)
+    
+X_test = np.stack(X_test)
+
+predict = model.predict(X_test)
+predict = sc.inverse_transform(predict)
+
+# Avaliação do modelo
+
+diff = predict - test
+
+print("MSE:", np.mean(diff**2))
+print("MAE:", np.mean(abs(diff)))
+print("RMSE:", np.sqrt(np.mean(diff**2)))
+
+# Predição para 20 dias
+
+pred_ = predict[-1].copy()
+prediction_full = []
+window = 30
+df_copy = df.iloc[:, 1:2][1:].values
+
+for j in range(20):
+    df_ = np.vstack((df_copy, pred_))
+    train_ = df_[:num_shape]
+    test_ = df_[num_shape:]
+    
+    df_volume_ = np.vstack((train_, test_))
+
+    inputs_ = df_volume_[df_volume_.shape[0] - test_.shape[0] - window:]
+    inputs_ = inputs_.reshape(-1,1)
+    inputs_ = sc.transform(inputs_)
+
+    X_test_2 = []
+
+    for k in range(window, num_2):
+        X_test_3 = np.reshape(inputs_[k-window:k, 0], (window, 1))
+        X_test_2.append(X_test_3)
+
+    X_test_ = np.stack(X_test_2)
+    predict_ = model.predict(X_test_)
+    pred_ = sc.inverse_transform(predict_)
+    prediction_full.append(pred_[-1][0])
+    df_copy = df_[j:]
+    
+prediction_full_new = np.vstack((predict, np.array(prediction_full).reshape(-1,1)))
+
+df_date = df[['Date']]
+
+for h in range(20):
+    df_date_add = pd.to_datetime(df_date['Date'].iloc[-1]) + pd.DateOffset(days=1)
+    df_date_add = pd.DataFrame([df_date_add.strftime("%Y-%m-%d")], columns=['Date'])
+    df_date = df_date.append(df_date_add)
+df_date = df_date.reset_index(drop=True)
+plt.figure(figsize=(20,7))
+plt.plot(df['Date'].values[300:], df_volume[300:], color = 'red', label = 'Valor real')
+plt.plot(df_date['Date'][-prediction_full_new.shape[0]:].values, prediction_full_new, color = 'blue', label = 'Valor previsto')
+plt.xticks(np.arange(20,df[300:].shape[0],20))
+plt.title('Valor previsto do Bitcoin')
+plt.xlabel('Data')
+plt.ylabel('Valor ($)')
+plt.legend()
+plt.show()
+
+# Arquitetura GRU
+modelGRU = Sequential()
+
+# Primeira camada GRU com regularização Dropout
+modelGRU.add(GRU(units=50, return_sequences=True, input_shape=(X_train.shape[1],1)))
+modelGRU.add(Dropout(0.2))
+
+# Segunda camada GRU
+modelGRU.add(GRU(units=50, return_sequences=True, input_shape=(X_train.shape[1],1)))
+modelGRU.add(Dropout(0.2))
+
+# Terceira camada GRU
+modelGRU.add(GRU(units=50, return_sequences=True, input_shape=(X_train.shape[1],1)))
+modelGRU.add(Dropout(0.2))
+
+# Quarta camada GRU
+modelGRU.add(GRU(units=50))
+modelGRU.add(Dropout(0.2))
+
+# Camada de saída
+modelGRU.add(Dense(units=1))
+
+# Resumo
+modelGRU.summary()   
+
+# Compilando a RNN(GRU)
+modelGRU.compile(optimizer='adam', loss='mean_squared_error')
+
+# Fit para o conjunto de treino
+modelGRU.fit(X_train, y_train, epochs=200, batch_size=16, verbose=2) 
+
+# Predição para 20 dias
+
+pred_ = predict[-1].copy()
+prediction_full = []
+window = 30
+df_copy = df.iloc[:, 1:2][1:].values
+
+for j in range(20):
+    df_ = np.vstack((df_copy, pred_))
+    train_ = df_[:num_shape]
+    test_ = df_[num_shape:]
+    
+    df_volume_ = np.vstack((train_, test_))
+
+    inputs_ = df_volume_[df_volume_.shape[0] - test_.shape[0] - window:]
+    inputs_ = inputs_.reshape(-1,1)
+    inputs_ = sc.transform(inputs_)
+
+    X_test_2 = []
+
+    for k in range(window, num_2):
+        X_test_3 = np.reshape(inputs_[k-window:k, 0], (window, 1))
+        X_test_2.append(X_test_3)
+
+    X_test_ = np.stack(X_test_2)
+    predict_ = modelGRU.predict(X_test_)
+    pred_ = sc.inverse_transform(predict_)
+    prediction_full.append(pred_[-1][0])
+    df_copy = df_[j:]
+    
+    prediction_full_new = np.vstack((predict, np.array(prediction_full).reshape(-1,1)))
+
+df_date = df[['Timestamp']]
+
+for h in range(20):
+    kk = pd.to_datetime(df_date['Timestamp'].iloc[-1]) + pd.DateOffset(days=1)
+    kk = pd.DataFrame([kk.strftime("%Y-%m-%d")], columns=['Timestamp'])
+    df_date = df_date.append(kk)
+df_date = df_date.reset_index(drop=True)
+
+plt.figure(figsize=(20,7))
+plt.plot(df['Timestamp'].values[300:], df_volume[300:], color = 'red', label = 'Valor real')
+plt.plot(df_date['Timestamp'][-prediction_full_new.shape[0]:].values, prediction_full_new, color = 'blue', label = 'Valor previsto')
+plt.xticks(np.arange(20,df_date[300:].shape[0],20))
+plt.title('Predição do valor do Bitcoin')
+plt.xlabel('Data')
+plt.ylabel('Valor ($)')
+plt.legend()
+plt.show()
