@@ -1,8 +1,14 @@
 # bitcoin
-Dataset Bitcoin Price - Machine Learning - 
-Dataset para uso no trabalho final da disciplina de Aprendizado de Máquina (Machine Learning) da Prof. Flavia Bernardini e Prof José Viterbo.
-Universidade Federal Fluminense - UFF / Período: 2021/1
-Dataset público Open Source - Fonte do Dataset: https://data.world/amodu/bitcoin-price-analysis 
-Grupo do trabalho: Egberto Caballero, Marcel Dias, Roberto Saeger.
+Universidade Federal Fluminense - UFF
+Instituto de Computação - PPG
+Disciplina: Aprendizado de Máquina
+Professores: Dra. Flavia Bernardini e Dr. José Viterbo.
+Título do Trabalho: Previsão da variação do preço do Bitcoin usando redes neurais LSTM e GRU
+Acadêmicos: Egberto Caballero, Marcel Dias, Roberto Saeger.
+Data Final de Entrega: 25/06/2021  / Semestre: 2021/1
 
-Os scripst desenvolvidos dos modelos aplicados de rede neural LSTM e o GRU, foram usadas as bibliotecas Tensor Flow e Keras estão disponíveis em:  https://colab.research.google.com/drive/1chk4FSuHvM7UYjWAeHNCYVkaNYIgGEyq?usp=sharing
+Arquivos:
+- Dataset Bitcoin Price - Machine Learning (Fonte do Dataset: https://data.world/amodu/bitcoin-price-analysis)
+- Script Python - Modelos aplicados de rede neural LSTM e o GRU, uso das bibliotecas Tensor Flow e Keras  (pasta codigo)
+- Imagens do projeto (pasta imagens)
+- README.md com informações do projeto.
